@@ -53,7 +53,18 @@ let ``should match nested comments``() =
 
 [<Test>]
 let ``line comments only allow asterisk, slash, or whitespace between // and token``() = 
-    (defaultOptions, "File1.fs", [| "//*/  /* TODO stuff"; "//+ TODO something else"; "// *TODO other"; "// another TODO xxx" |])
+    (defaultOptions, "File1.fs", [| "//*/  /* TODO stuff"
+                                    "//+ TODO something else"
+                                    "// *TODO other"
+                                    "// another TODO xxx" |])
+    => [| (2, "TODO stuff", "File1.fs", 0, 9); (2, "TODO other", "File1.fs", 2, 4) |]
+
+[<Test>]
+let ``multiline comments only allow asterisk, slash, or whitespace between line head and first other token``() =
+    (defaultOptions, "File1.fs", [| "(**/  /* TODO stuff*)"
+                                    "(*+ TODO something else *)"
+                                    "(* *TODO other *)"
+                                    "(* another TODO xxx *)" |])
     => [| (2, "TODO stuff", "File1.fs", 0, 9); (2, "TODO other", "File1.fs", 2, 4) |]
 
 [<Test>]

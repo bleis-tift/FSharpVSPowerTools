@@ -95,7 +95,7 @@ module private Utils =
                     (lineNumber, acc, tokenizer, state)
                 else
                     let tokenizer = sourceTok.CreateLineTokenizer(lines.[lineNumber + 1])
-                    scanMultilineComments tokenizer acc state nestLevel (lineNumber + 1)
+                    (lineNumber + 1, acc, tokenizer, state)
 
         let nextLineNumber, lineNumAndTokens, tokenizer, state = scanMultilineComments tokenizer [] state 0 lineNumber
         match lineNumAndTokens |> List.rev |> List.tryFind (fun (ln, tok) -> isFirstToken (tok.Text(lines, ln))) with
