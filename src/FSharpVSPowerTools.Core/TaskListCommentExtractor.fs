@@ -50,26 +50,32 @@ module private Utils =
     let isFirstToken (tokenText: string) =
         tokenText.TrimStart(trimChars) <> String.Empty
 
-    let tokenizeFirstToken (tokText: string) =
-        let rec tokenize (tokenizer: LineTokenizer) state =
+    let tryTokenizeFirstToken (tokText: string) =
+        let rec tryTokenize (tokenizer: LineTokenizer) state =
             match tokenizer.ScanToken(state) with
-            | Some tok, state when not <| isFirstToken (tok.Text([| tokText |], 0)) -> tokenize tokenizer state
-            | Some tok, _ -> (tok, tokText.Substring(tok.LeftColumn, tok.FullMatchedLength))
-            | None, _ -> (Unchecked.defaultof<_>, String.Empty)
+            | Some tok, state when not <| isFirstToken (tok.Text([| tokText |], 0)) -> tryTokenize tokenizer state
+            | Some tok, _ -> Some (tok, tokText.Substring(tok.LeftColumn, tok.FullMatchedLength))
+            | None, _ -> None
         let tokenizer = sourceTok.CreateLineTokenizer(tokText)
-        tokenize tokenizer 0L
+        tryTokenize tokenizer 0L
 
-    let rec tryFindLineCommentTaskToken tasks (lines: string[], lineNumber: int, tokenizer: LineTokenizer, state) =
-        match tokenizer.ScanToken(state) with
-        | Some tok, state ->
-            let tokText = tok.Text(lines, lineNumber).ToLowerInvariant()
-            let tok2, tokenizedText = tokenizeFirstToken tokText
-            if isFirstToken tokenizedText && tasks |> Array.exists ((=) tokenizedText) then
-                let pos = { Line = lineNumber; Column = tok.LeftColumn + tok2.LeftColumn }
-                (Some (tokenizedText, pos), state)
-            else
-                tryFindLineCommentTaskToken tasks (lines, lineNumber, tokenizer, state)
-        | _ -> None, state
+    let tryFindLineCommentTaskToken tasks (lines: string[], lineNumber: int, tokenizer: LineTokenizer, state) =
+        let rec tryFindLineCommentTaskToken' state =
+            match tokenizer.ScanToken(state) with
+            | Some tok, state ->
+                let tokText = tok.Text(lines, lineNumber).ToLowerInvariant()
+                match tryTokenizeFirstToken tokText with
+                | Some (tok2, tokenizedText) ->
+                    if isFirstToken tokenizedText && tasks |> Array.exists ((=) tokenizedText) then
+                        let pos = { Line = lineNumber; Column = tok.LeftColumn + tok2.LeftColumn }
+                        (Some (tokenizedText, pos), state)
+                    elif tok2.CharClass = TokenCharKind.Identifier then
+                        None, state
+                    else
+                        tryFindLineCommentTaskToken' state
+                | None -> tryFindLineCommentTaskToken' state
+            | _ -> None, state
+        tryFindLineCommentTaskToken' state |> fst
 
     let rec tryFindMultilineCommentTaskToken tasks (lines: string[], lineNumber: int, tokenizer: LineTokenizer, state) =
         let rec scanMultilineComments (tokenizer: LineTokenizer) acc state nestLevel lineNumber =
@@ -112,11 +118,11 @@ module private Utils =
                 let tokText = tok.Text(lines, lineNumber)
                 if tokText |> String.forall (function '/' | '*' | ' ' | '\t' -> true | _ -> false) then
                     match tryFindLineCommentTaskToken tasks (lines, lineNumber, tokenizer, state) with
-                    | Some (task, pos), _ ->
+                    | Some (task, pos) ->
                         let pos = OnelineTaskListCommentPos (task, pos)
                         Some (pos, (lines, lineNumber + 1, createNewLineTokenizer lines lineNumber, firstState))
-                    | None, state ->
-                        nextTaskListCommentPos tasks (lines, lineNumber, tokenizer, state)
+                    | None ->
+                        nextTaskListCommentPos tasks (lines, lineNumber + 1, createNewLineTokenizer lines lineNumber, firstState)
                 else
                     let tokenizer = createNewLineTokenizer lines lineNumber
                     nextTaskListCommentPos tasks (lines, lineNumber + 1, tokenizer, firstState)
