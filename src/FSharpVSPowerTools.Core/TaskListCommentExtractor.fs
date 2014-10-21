@@ -46,7 +46,7 @@ module private Utils =
             else lines.[lineNumber + 1]
         sourceTok.CreateLineTokenizer(nextLine)
 
-    let trimChars = [| ' '; '\t'; '/'; '*' |]
+    let trimChars = [| ' '; '\t'; '/'; '('; ')'; '*' |]
     let isFirstToken (tokenText: string) =
         tokenText.TrimStart(trimChars) <> String.Empty
 
@@ -116,7 +116,7 @@ module private Utils =
             match tok.CharClass with
             | TokenCharKind.LineComment ->
                 let tokText = tok.Text(lines, lineNumber)
-                if tokText |> String.forall (function '/' | '*' | ' ' | '\t' -> true | _ -> false) then
+                if tokText |> String.forall (function '/' | '(' | ')' | '*' | ' ' | '\t' -> true | _ -> false) then
                     match tryFindLineCommentTaskToken tasks (lines, lineNumber, tokenizer, state) with
                     | Some (task, pos) ->
                         let pos = OnelineTaskListCommentPos (task, pos)
